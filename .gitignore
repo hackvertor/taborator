@@ -1,0 +1,7 @@
+out/
+build/
+.gradle/
+#intellij
+.idea/
+.classpath/
+.project/

@@ -1,0 +1,29 @@
+apply plugin: 'java'
+
+ext {
+    isDev = false
+}
+
+repositories {
+    mavenLocal()
+
+    if (isDev) {
+        maven {
+            url 'http://dev-registry.portswigger.com/repository/maven-public'
+        }
+    }
+    else {
+        mavenCentral()
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'lib', include: '*.jar')
+    compileOnly 'net.portswigger.burp.extender:burp-extender-api:1.7.22'
+}
+
+jar {
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
