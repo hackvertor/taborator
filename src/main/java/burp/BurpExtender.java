@@ -11,6 +11,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
@@ -27,12 +29,15 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private ArrayList<Integer> readRows = new ArrayList<Integer>();
     private IBurpCollaboratorClientContext collaborator = null;
     private HashMap<Integer, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
+    private HashMap<String, byte[]> originalRequests = new HashMap<>();
     private int selectedRow = -1;
+    public static final String COLLABORATOR_PLACEHOLDER = "$collab";
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         helpers = callbacks.getHelpers();
         this.callbacks = callbacks;
         callbacks.registerExtensionStateListener(this);
         callbacks.registerContextMenuFactory(this);
+        callbacks.registerHttpListener(this);
         stderr = new PrintWriter(callbacks.getStderr(), true);
         stdout = new PrintWriter(callbacks.getStdout(), true);
         callbacks.setExtensionName(extensionName);
@@ -109,7 +114,11 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     taboratorMessageEditorController.setRequest(collaboratorRequest);
                                     taboratorMessageEditorController.setResponse(collaboratorResponse);
                                     description.setText("The Collaborator server received an "+interaction.getProperty("protocol")+" request.\n\nThe request was received from IP address "+interaction.getProperty("client_ip")+" at "+interaction.getProperty("time_stamp"));
-                                    interactionsTab.addTab("Original request", new JPanel());
+                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id")+"."+collaborator.getCollaboratorServerLocation())) {
+                                        IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
+                                        requestMessageEditor.setMessage(originalRequests.get(interaction.getProperty("interaction_id")+"."+collaborator.getCollaboratorServerLocation()), true);
+                                        interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
+                                    }
                                     IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     requestMessageEditor.setMessage(collaboratorRequest, true);
                                     interactionsTab.addTab("Request to Collaborator", requestMessageEditor.getComponent());
@@ -121,7 +130,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 descriptionPanel.add(description);
                                 collaboratorClientSplit.setBottomComponent(interactionsTab);
                                 selectedRow = row;
-                                updateTab();
+                                updateTab(false);
                             }
                         } else {
                             if(!readRows.contains(row)) {
@@ -138,14 +147,16 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                             if(lastPollDate == null || (date.getTime() - lastPollDate.getTime()) > pollEveryMS) {
                                 lastPollDate = date;
                                 List<IBurpCollaboratorInteraction> interactions = collaborator.fetchAllCollaboratorInteractions();
+                                boolean hasInteractions = false;
                                 for(int i=0;i<interactions.size();i++) {
                                     IBurpCollaboratorInteraction interaction =  interactions.get(i);
                                     int rowID = model.getRowCount()+1;
                                     model.addRow(new Object[]{rowID, interaction.getProperty("time_stamp"), interaction.getProperty("type"), interaction.getProperty("client_ip"), interaction.getProperty("interaction_id"), ""});
                                     unread++;
                                     interactionHistory.put(rowID, interaction);
+                                    hasInteractions = true;
                                 }
-                                updateTab();
+                                updateTab(hasInteractions);
                             }
                             try {
                                 Thread.sleep(pollEveryMS);
@@ -169,19 +180,32 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         return extensionName + " ("+unread+")";
     }
 
-    private void updateTab() {
-        JTabbedPane tp = (JTabbedPane) BurpExtender.this.getUiComponent().getParent();
-        int tIndex = getTabIndex(BurpExtender.this);
-        if(tIndex > -1) {
-            tp.setTitleAt(tIndex, getTabCaption());
+    private void changeTabColour(JTabbedPane tabbedPane, final int tabIndex, boolean hasInteractions) {
+        if(hasInteractions) {
+            tabbedPane.setBackgroundAt(tabIndex, new Color(0xff6633));
+        } else {
+            tabbedPane.setBackgroundAt(tabIndex, new Color(0x000000));
+        }
+    }
+
+    private void updateTab(boolean hasInteractions) {
+        if(running) {
+            JTabbedPane tp = (JTabbedPane) BurpExtender.this.getUiComponent().getParent();
+            int tIndex = getTabIndex(BurpExtender.this);
+            if (tIndex > -1) {
+                tp.setTitleAt(tIndex, getTabCaption());
+                changeTabColour(tp, tIndex, hasInteractions);
+            }
         }
     }
 
     private int getTabIndex(ITab your_itab) {
-        JTabbedPane parent = (JTabbedPane) your_itab.getUiComponent().getParent();
-        for(int i = 0; i < parent.getTabCount(); ++i) {
-            if(parent.getTitleAt(i).contains(extensionName+" (")) {
-                return i;
+        if(running) {
+            JTabbedPane parent = (JTabbedPane) your_itab.getUiComponent().getParent();
+            for (int i = 0; i < parent.getTabCount(); ++i) {
+                if (parent.getTitleAt(i).contains(extensionName + " (")) {
+                    return i;
+                }
             }
         }
         return -1;
@@ -193,42 +217,109 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         }
         switch(toolFlag) {
             case IBurpExtenderCallbacks.TOOL_PROXY:
-                if(!tagsInProxy) {
-                    return;
-                }
                 break;
             case IBurpExtenderCallbacks.TOOL_INTRUDER:
-                if(!tagsInIntruder) {
-                    return;
-                }
                 break;
             case IBurpExtenderCallbacks.TOOL_REPEATER:
-                if(!tagsInRepeater) {
-                    return;
-                }
                 break;
             case IBurpExtenderCallbacks.TOOL_SCANNER:
-                if(!tagsInScanner) {
-                    return;
-                }
                 break;
             case IBurpExtenderCallbacks.TOOL_EXTENDER:
-                if(!tagsInExtensions) {
-                    return;
-                }
                 break;
             default:
                 return;
         }
         byte[] request = messageInfo.getRequest();
-        if(helpers.indexOf(request,helpers.stringToBytes("<@"), true, 0, request.length) > -1) {
-            Hackvertor hv = new Hackvertor();
-            request = helpers.stringToBytes(hv.convert(helpers.bytesToString(request)));
-            if(autoUpdateContentLength) {
-                request = fixContentLength(request);
+        if(helpers.indexOf(request,helpers.stringToBytes(COLLABORATOR_PLACEHOLDER), true, 0, request.length) > -1) {
+            String requestStr = helpers.bytesToString(request);
+            Matcher m = Pattern.compile(COLLABORATOR_PLACEHOLDER.replace("$","\\$")).matcher(requestStr);
+            ArrayList<String> collaboratorPayloads = new ArrayList<>();
+            while (m.find()) {
+                String collaboratorPayload = collaborator.generatePayload(true);
+                collaboratorPayloads.add(collaboratorPayload);
+                requestStr = requestStr.replaceFirst(COLLABORATOR_PLACEHOLDER.replace("$","\\$"), collaboratorPayload);
             }
+            request = helpers.stringToBytes(requestStr);
+            request = fixContentLength(request);
             messageInfo.setRequest(request);
+            for(int i=0;i<collaboratorPayloads.size();i++) {
+                originalRequests.put(collaboratorPayloads.get(i), request);
+            }
         }
+    }
+
+    public byte[] fixContentLength(byte[] request) {
+        IRequestInfo analyzedRequest = helpers.analyzeRequest(request);
+        if (countMatches(request, helpers.stringToBytes("Content-Length: ")) > 0) {
+            int start = analyzedRequest.getBodyOffset();
+            int contentLength = request.length - start;
+            return setHeader(request, "Content-Length", Integer.toString(contentLength));
+        }
+        else {
+            return request;
+        }
+    }
+
+    public int[] getHeaderOffsets(byte[] request, String header) {
+        int i = 0;
+        int end = request.length;
+        while (i < end) {
+            int line_start = i;
+            while (i < end && request[i++] != ' ') {
+            }
+            byte[] header_name = Arrays.copyOfRange(request, line_start, i - 2);
+            int headerValueStart = i;
+            while (i < end && request[i++] != '\n') {
+            }
+            if (i == end) {
+                break;
+            }
+
+            String header_str = helpers.bytesToString(header_name);
+
+            if (header.equals(header_str)) {
+                int[] offsets = {line_start, headerValueStart, i - 2};
+                return offsets;
+            }
+
+            if (i + 2 < end && request[i] == '\r' && request[i + 1] == '\n') {
+                break;
+            }
+        }
+        return null;
+    }
+
+    public  byte[] setHeader(byte[] request, String header, String value) {
+        int[] offsets = getHeaderOffsets(request, header);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try {
+            outputStream.write( Arrays.copyOfRange(request, 0, offsets[1]));
+            outputStream.write(helpers.stringToBytes(value));
+            outputStream.write(Arrays.copyOfRange(request, offsets[2], request.length));
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Request creation unexpectedly failed");
+        } catch (NullPointerException e) {
+            throw new RuntimeException("Can't find the header");
+        }
+    }
+
+    int countMatches(byte[] response, byte[] match) {
+        int matches = 0;
+        if (match.length < 4) {
+            return matches;
+        }
+
+        int start = 0;
+        while (start < response.length) {
+            start = helpers.indexOf(response, match, true, start, response.length);
+            if (start == -1)
+                break;
+            matches += 1;
+            start += match.length;
+        }
+
+        return matches;
     }
 
     public List<JMenuItem> createMenuItems(IContextMenuInvocation invocation) {
@@ -265,7 +356,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
                 try {
                     outputStream.write(Arrays.copyOfRange(message, 0, bounds[0]));
-                    outputStream.write(helpers.stringToBytes("$collab"));
+                    outputStream.write(helpers.stringToBytes(COLLABORATOR_PLACEHOLDER));
                     outputStream.write(Arrays.copyOfRange(message, bounds[1],message.length));
                     outputStream.flush();
                     invocation.getSelectedMessages()[0].setRequest(outputStream.toByteArray());
