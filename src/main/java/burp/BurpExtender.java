@@ -33,6 +33,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private HashMap<Integer, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
     private HashMap<String, IHttpRequestResponse> originalRequests = new HashMap<>();
     private int selectedRow = -1;
+    private HashMap<Integer, Color> colours = new HashMap<>();
+    private HashMap<Integer, Color> textColours = new HashMap<>();
     public static final String COLLABORATOR_PLACEHOLDER = "$collab";
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         helpers = callbacks.getHelpers();
@@ -82,17 +84,16 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 });
                 popupMenu.add(commentMenuItem);
                 JMenu highlightMenu = new JMenu("Highlight");
-                JMenuItem blackColourItem = new JMenuItem("HTTP");
-                blackColourItem.addActionListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        int rowNum = collaboratorTable.getSelectedRow();
-                        if(rowNum > -1) {
-
-                        }
-                    }
-                });
-                highlightMenu.add(blackColourItem);
+                highlightMenu.add(generateMenuItem(collaboratorTable, null, "HTTP", null));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfa6364"), "HTTP", Color.white));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfac564"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfafa64"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0x63fa64"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0x63fafa"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0x6363fa"), "HTTP", Color.white));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfac5c5"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfa63fa"), "HTTP", Color.black));
+                highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xb1b1b1"), "HTTP", Color.black));
                 popupMenu.add(highlightMenu);
                 collaboratorTable.setComponentPopupMenu(popupMenu);
 
@@ -203,6 +204,15 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 c.setFont(c.getFont().deriveFont(Font.BOLD));
                             }
                         }
+
+                        if(colours.containsKey(row)) {
+                            setBackground(colours.get(row));
+                            setForeground(textColours.get(row));
+                        } else {
+                            setBackground(null);
+                            setForeground(null);
+                        }
+
                         return c;
                     }
                 });
@@ -275,6 +285,23 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             }
         }
         return -1;
+    }
+
+    private JMenuItem generateMenuItem(JTable collaboratorTable, Color colour, String text, Color textColour) {
+        JMenuItem item = new JMenuItem(text);
+        item.setBackground(colour);
+        item.setForeground(textColour);
+        item.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int rowNum = collaboratorTable.getSelectedRow();
+                if(rowNum > -1) {
+                    colours.put(rowNum, colour);
+                    textColours.put(rowNum, textColour);
+                }
+            }
+        });
+        return item;
     }
 
     public void processHttpMessage(int toolFlag, boolean messageIsRequest, IHttpRequestResponse messageInfo) {
