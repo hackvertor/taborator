@@ -4,6 +4,8 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -62,6 +64,38 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 model.addColumn("IP");
                 model.addColumn("Payload");
                 model.addColumn("Comment");
+                collaboratorTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+                collaboratorTable.getColumnModel().getColumn(0).setMaxWidth(50);
+                collaboratorTable.getColumnModel().getColumn(2).setPreferredWidth(80);
+                collaboratorTable.getColumnModel().getColumn(2).setMaxWidth(80);
+                JPopupMenu popupMenu = new JPopupMenu();
+                JMenuItem commentMenuItem = new JMenuItem("Add comment");
+                commentMenuItem.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        int rowNum = collaboratorTable.getSelectedRow();
+                        if(rowNum > -1) {
+                            String comment = JOptionPane.showInputDialog("Please enter a comment");
+                            collaboratorTable.getModel().setValueAt(comment, rowNum, 5);
+                        }
+                    }
+                });
+                popupMenu.add(commentMenuItem);
+                JMenu highlightMenu = new JMenu("Highlight");
+                JMenuItem blackColourItem = new JMenuItem("HTTP");
+                blackColourItem.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        int rowNum = collaboratorTable.getSelectedRow();
+                        if(rowNum > -1) {
+
+                        }
+                    }
+                });
+                highlightMenu.add(blackColourItem);
+                popupMenu.add(highlightMenu);
+                collaboratorTable.setComponentPopupMenu(popupMenu);
+
                 JScrollPane collaboratorScroll = new JScrollPane(collaboratorTable);
                 collaboratorTable.setFillsViewportHeight(true);
                 collaboratorClientSplit.setTopComponent(collaboratorScroll);
@@ -98,7 +132,34 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     messageEditor.setMessage(helpers.base64Decode(interaction.getProperty("raw_query")), false);
                                     interactionsTab.addTab("DNS query", messageEditor.getComponent());
                                 } else if(interaction.getProperty("type").equals("SMTP")) {
-                                    //todo
+                                    byte[] conversation = helpers.base64Decode(interaction.getProperty("conversation"));
+                                    String conversationString = helpers.bytesToString(conversation);
+                                    String to = "";
+                                    String from = "";
+                                    String message = "";
+                                    Matcher m = Pattern.compile("^RCPT TO:(.+?)$", Pattern.CASE_INSENSITIVE + Pattern.MULTILINE).matcher(conversationString);
+                                    if(m.find()) {
+                                        to = m.group(1).trim();
+                                    }
+                                    m = Pattern.compile("^MAIL From:(.+)?$", Pattern.CASE_INSENSITIVE + Pattern.MULTILINE).matcher(conversationString);
+                                    if(m.find()) {
+                                        from = m.group(1).trim();
+                                    }
+                                    m = Pattern.compile("^DATA[\\r\\n]+([\\d\\D]+)?[\\r\\n]+[.][\\r\\n]+", Pattern.CASE_INSENSITIVE + Pattern.MULTILINE).matcher(conversationString);
+                                    if(m.find()) {
+                                        message = m.group(1).trim();
+                                    }
+                                    TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
+                                    description.setText(
+                                            "The Collaborator server received a SMTP connection from IP address " + interaction.getProperty("client_ip") + " at " + interaction.getProperty("time_stamp") + ".\n\n" +
+                                            "The email details were:\n\n" +
+                                            "From: " + from + "\n\n" +
+                                            "To: " + to + "\n\n" +
+                                            "Message: \n" + message
+                                    );
+                                    IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
+                                    messageEditor.setMessage(conversation, false);
+                                    interactionsTab.addTab("SMTP Conversation", messageEditor.getComponent());
                                 } else if(interaction.getProperty("type").equals("HTTP")) {
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
                                     URL collaboratorURL = null;
