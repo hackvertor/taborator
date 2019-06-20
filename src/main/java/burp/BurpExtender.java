@@ -239,7 +239,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         while(running){
                             Date date = new Date();
                             if(lastPollDate == null || (date.getTime() - lastPollDate.getTime()) > pollEveryMS) {
-                                lastPollDate = date;
                                 List<IBurpCollaboratorInteraction> interactions = collaborator.fetchAllCollaboratorInteractions();
                                 boolean hasInteractions = false;
                                 for(int i=0;i<interactions.size();i++) {
@@ -251,6 +250,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     hasInteractions = true;
                                 }
                                 updateTab(hasInteractions);
+                                lastPollDate = date;
                             }
                             try {
                                 Thread.sleep(pollEveryMS);
