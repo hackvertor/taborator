@@ -11,4 +11,4 @@ Install from the BApp store.
 
 ![Tab Screenshot](https://github.com/hackvertor/taborator/blob/master/images/screenshot-tab.png)
 
-![Client Screenshot](https://github.com/hackvertor/taborator/blob/master/images/client-tab.png)
+![Client Screenshot](https://github.com/hackvertor/taborator/blob/master/images/screenshot-client.png)
