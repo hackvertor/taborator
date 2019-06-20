@@ -205,9 +205,27 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                             }
                         }
 
-                        if(colours.containsKey(row)) {
+                        if(colours.containsKey(row) && isSelected) {
+                            if(colours.get(row) == null) {
+                                setBackground(colours.get(row));
+                                colours.remove(row);
+                                textColours.remove(row);
+                            } else {
+                                setBackground(colours.get(row).darker());
+                            }
+                            setForeground(textColours.get(row));
+                            collaboratorTable.repaint();
+                        } else if(colours.containsKey(row)) {
                             setBackground(colours.get(row));
                             setForeground(textColours.get(row));
+                        } else if(isSelected) {
+                            if(UIManager.getLookAndFeel().getID().equals("Darcula")) {
+                                setBackground(Color.decode("0x0d293e"));
+                                setForeground(Color.white);
+                            } else {
+                                setBackground(Color.decode("0xffc599"));
+                                setForeground(Color.black);
+                            }
                         } else {
                             setBackground(null);
                             setForeground(null);
@@ -291,6 +309,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         JMenuItem item = new JMenuItem(text);
         item.setBackground(colour);
         item.setForeground(textColour);
+        item.setOpaque(true);
         item.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
