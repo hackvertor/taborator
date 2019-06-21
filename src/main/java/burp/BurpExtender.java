@@ -34,7 +34,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private int selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
     private HashMap<Integer, Color> textColours = new HashMap<>();
-    private static final String COLLABORATOR_PLACEHOLDER = "$collab";
+    private static final String COLLABORATOR_PLACEHOLDER = "$collabplz";
     private static final long POLL_EVERY_MS = 3000;
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         helpers = callbacks.getHelpers();
