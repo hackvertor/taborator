@@ -30,7 +30,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private ArrayList<Integer> readRows = new ArrayList<Integer>();
     private IBurpCollaboratorClientContext collaborator = null;
     private HashMap<Integer, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
-    private HashMap<String, IHttpRequestResponse> originalRequests = new HashMap<>();
+    private HashMap<String, IHttpRequestResponse> originalRequests = new LimitedHashMap<>(10000);
     private int selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
     private HashMap<Integer, Color> textColours = new HashMap<>();
