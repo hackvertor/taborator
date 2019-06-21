@@ -236,6 +236,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 });
                 Runnable collaboratorRunnable = new Runnable() {
                     public void run() {
+                        stdout.println("Taborator running");
                         while(running){
                             Date date = new Date();
                             if(lastPollDate == null || (date.getTime() - lastPollDate.getTime()) > pollEveryMS) {
@@ -259,6 +260,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 return;
                             }
                         }
+                        stdout.println("Taborator shutdown");
                     }
                 };
                 new Thread(collaboratorRunnable).start();
