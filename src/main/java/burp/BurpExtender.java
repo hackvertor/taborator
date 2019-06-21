@@ -26,7 +26,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private JPanel panel;
     private volatile boolean running;
     private int unread = 0;
-    long pollEveryMS = 3000;
     private Date lastPollDate = null;
     private ArrayList<Integer> readRows = new ArrayList<Integer>();
     private IBurpCollaboratorClientContext collaborator = null;
@@ -35,7 +34,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private int selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
     private HashMap<Integer, Color> textColours = new HashMap<>();
-    public static final String COLLABORATOR_PLACEHOLDER = "$collab";
+    private static final String COLLABORATOR_PLACEHOLDER = "$collab";
+    private static final long POLL_EVERY_MS = 3000;
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         helpers = callbacks.getHelpers();
         this.callbacks = callbacks;
@@ -239,7 +239,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         stdout.println("Taborator running");
                         while(running){
                             Date date = new Date();
-                            if(lastPollDate == null || (date.getTime() - lastPollDate.getTime()) > pollEveryMS) {
+                            if(lastPollDate == null || (date.getTime() - lastPollDate.getTime()) > POLL_EVERY_MS) {
                                 List<IBurpCollaboratorInteraction> interactions = collaborator.fetchAllCollaboratorInteractions();
                                 boolean hasInteractions = false;
                                 for(int i=0;i<interactions.size();i++) {
@@ -254,7 +254,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 lastPollDate = date;
                             }
                             try {
-                                Thread.sleep(pollEveryMS);
+                                Thread.sleep(POLL_EVERY_MS);
                             } catch (InterruptedException e) {
                                 stderr.println(e.toString());
                                 return;
