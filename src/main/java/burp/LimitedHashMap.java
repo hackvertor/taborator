@@ -14,9 +14,6 @@ public class LimitedHashMap<K, V> extends LinkedHashMap<K, V> {
 
     @Override
     protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-        if (size() > maxSize) {
-            System.out.println("Discarding old interaction");
-        }
         return size() > maxSize;
     }
 }
