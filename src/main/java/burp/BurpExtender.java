@@ -396,20 +396,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         if(!messageIsRequest) {
             return;
         }
-        switch(toolFlag) {
-            case IBurpExtenderCallbacks.TOOL_PROXY:
-                break;
-            case IBurpExtenderCallbacks.TOOL_INTRUDER:
-                break;
-            case IBurpExtenderCallbacks.TOOL_REPEATER:
-                break;
-            case IBurpExtenderCallbacks.TOOL_SCANNER:
-                break;
-            case IBurpExtenderCallbacks.TOOL_EXTENDER:
-                break;
-            default:
-                return;
-        }
         byte[] request = messageInfo.getRequest();
         if(helpers.indexOf(request,helpers.stringToBytes(COLLABORATOR_PLACEHOLDER), true, 0, request.length) > -1) {
             String requestStr = helpers.bytesToString(request);
