@@ -400,6 +400,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 String collaboratorPayloadID = collaborator.generatePayload(false);
                 collaboratorPayloads.add(collaboratorPayloadID);
                 requestStr = requestStr.replaceFirst(COLLABORATOR_PLACEHOLDER.replace("$","\\$"), collaboratorPayloadID+"."+collaborator.getCollaboratorServerLocation());
+                pollNow = true;
+                createdCollaboratorPayload = true;
             }
             request = helpers.stringToBytes(requestStr);
             request = fixContentLength(request);
