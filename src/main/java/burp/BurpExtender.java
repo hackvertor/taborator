@@ -57,6 +57,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 stdout.println(extensionName + " " + extensionVersion);
                 running = true;
                 panel = new JPanel(new BorderLayout());
+                JLabel informationText = new JLabel("<html>To use Taborator right click in the repeater request tab and select \"Taborator->Insert Collaborator payload\".<br> Use \"Taborator->Insert Collaborator placeholder\" to insert a placeholder that will be replaced by a Collaborator payload in every request. The Taborator placeholder also works in other Burp tools.");
+                informationText.setBorder(BorderFactory.createCompoundBorder(informationText.getBorder(), BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+                panel.add(informationText, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
                     public void componentShown(ComponentEvent e) {
@@ -172,6 +175,14 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                             "The lookup was received from IP address " + interaction.getProperty("client_ip") + " at " + interaction.getProperty("time_stamp"));
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     messageEditor.setMessage(helpers.base64Decode(interaction.getProperty("raw_query")), false);
+                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id"))) {
+                                        IHttpRequestResponse messageInfo = originalRequests.get(interaction.getProperty("interaction_id"));
+                                        IHttpService httpService = messageInfo.getHttpService();
+                                        taboratorMessageEditorController.setHttpService(httpService);
+                                        IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
+                                        requestMessageEditor.setMessage(messageInfo.getRequest(), true);
+                                        interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
+                                    }
                                     interactionsTab.addTab("DNS query", messageEditor.getComponent());
                                 } else if(interaction.getProperty("type").equals("SMTP")) {
                                     byte[] conversation = helpers.base64Decode(interaction.getProperty("conversation"));
@@ -201,6 +212,14 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     );
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     messageEditor.setMessage(conversation, false);
+                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id"))) {
+                                        IHttpRequestResponse messageInfo = originalRequests.get(interaction.getProperty("interaction_id"));
+                                        IHttpService httpService = messageInfo.getHttpService();
+                                        taboratorMessageEditorController.setHttpService(httpService);
+                                        IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
+                                        requestMessageEditor.setMessage(messageInfo.getRequest(), true);
+                                        interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
+                                    }
                                     interactionsTab.addTab("SMTP Conversation", messageEditor.getComponent());
                                 } else if(interaction.getProperty("type").equals("HTTP")) {
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
