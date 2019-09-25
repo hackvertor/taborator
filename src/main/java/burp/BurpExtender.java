@@ -69,7 +69,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 interactionsTab = new JTabbedPane();
                 JSplitPane collaboratorClientSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
                 collaboratorClientSplit.setResizeWeight(.5d);
-                final Class[] classes = new Class[]{Integer.class, Date.class, String.class, String.class, String.class, String.class};
+                final Class[] classes = new Class[]{Integer.class, Long.class, String.class, String.class, String.class, String.class};
                 DefaultTableModel model = new DefaultTableModel() {
                     @Override
                     public boolean isCellEditable(int row, int column) {
@@ -304,7 +304,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 for(int i=0;i<interactions.size();i++) {
                                     IBurpCollaboratorInteraction interaction =  interactions.get(i);
                                     int rowID = model.getRowCount()+1;
-                                    model.addRow(new Object[]{rowID, interaction.getProperty("time_stamp"), interaction.getProperty("type"), interaction.getProperty("client_ip"), interaction.getProperty("interaction_id"), ""});
+                                    model.addRow(new Object[]{rowID,interaction.getProperty("time_stamp"), interaction.getProperty("type"), interaction.getProperty("client_ip"), interaction.getProperty("interaction_id"), ""});
                                     unread++;
                                     interactionHistory.put(rowID, interaction);
                                     hasInteractions = true;
