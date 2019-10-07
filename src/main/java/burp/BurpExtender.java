@@ -5,6 +5,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
@@ -21,29 +22,33 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "0.1";
+    private String extensionVersion = "1.2";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
     private PrintWriter stdout;
     private JPanel panel;
     private volatile boolean running;
-    private int unread = 0;
-    private ArrayList<Integer> readRows = new ArrayList<Integer>();
+    private long unread = 0;
+    private ArrayList<Long> readRows = new ArrayList<Long>();
     private IBurpCollaboratorClientContext collaborator = null;
-    private HashMap<Integer, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
+    private HashMap<Long, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
     private HashMap<String, IHttpRequestResponse> originalRequests = new LimitedHashMap<>(10000);
     private JTabbedPane interactionsTab;
-    private int selectedRow = -1;
-    private HashMap<Integer, Color> colours = new HashMap<>();
-    private HashMap<Integer, Color> textColours = new HashMap<>();
+    private long selectedRow = -1;
+    private HashMap<Long, Color> colours = new HashMap<>();
+    private HashMap<Long, Color> textColours = new HashMap<>();
     private static final String COLLABORATOR_PLACEHOLDER = "$collabplz";
     private Thread pollThread;
     private long POLL_EVERY_MS = 10000;
     private boolean pollNow = false;
     private boolean createdCollaboratorPayload = false;
     private int pollCounter = 0;
+    private boolean shutdown = false;
+    private boolean isSleeping = false;
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
+        shutdown = false;
+        isSleeping = false;
         helpers = callbacks.getHelpers();
         this.callbacks = callbacks;
         callbacks.registerExtensionStateListener(this);
@@ -55,11 +60,36 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 stdout.println(extensionName + " " + extensionVersion);
+                stdout.println("To use Taborator right click in the repeater request tab and select \"Taborator->Insert Collaborator payload\". Use \"Taborator->Insert Collaborator placeholder\" to insert a placeholder that will be replaced by a Collaborator payload in every request. The Taborator placeholder also works in other Burp tools. You can also use the buttons in the Taborator tab to create a payload and poll now.");
                 running = true;
                 panel = new JPanel(new BorderLayout());
-                JLabel informationText = new JLabel("<html>To use Taborator right click in the repeater request tab and select \"Taborator->Insert Collaborator payload\".<br> Use \"Taborator->Insert Collaborator placeholder\" to insert a placeholder that will be replaced by a Collaborator payload in every request. The Taborator placeholder also works in other Burp tools.");
-                informationText.setBorder(BorderFactory.createCompoundBorder(informationText.getBorder(), BorderFactory.createEmptyBorder(10, 10, 10, 10)));
-                panel.add(informationText, BorderLayout.NORTH);
+                JPanel topPanel = new JPanel();
+                topPanel.setLayout(new GridBagLayout());
+                JButton pollButton = new JButton("Poll now");
+                JButton createCollaboratorPayload = new JButton("Create payload & copy");
+                createCollaboratorPayload.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        String payload = collaborator.generatePayload(true);
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
+                    }
+                });
+                pollButton.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        pollNow = true;
+                        if(isSleeping) {
+                            pollThread.interrupt();
+                        }
+                    }
+                });
+                pollButton.setPreferredSize(new Dimension(180, 30));
+                pollButton.setMaximumSize(new Dimension(180, 30));
+                topPanel.add(pollButton, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
+                createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
+                topPanel.add(createCollaboratorPayload, createConstraints(2, 2, 1, GridBagConstraints.NONE));
+                panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
                     public void componentShown(ComponentEvent e) {
@@ -69,7 +99,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 interactionsTab = new JTabbedPane();
                 JSplitPane collaboratorClientSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
                 collaboratorClientSplit.setResizeWeight(.5d);
-                final Class[] classes = new Class[]{Integer.class, Long.class, String.class, String.class, String.class, String.class};
+                final Class[] classes = new Class[]{Long.class, Long.class, String.class, String.class, String.class, String.class};
                 DefaultTableModel model = new DefaultTableModel() {
                     @Override
                     public boolean isCellEditable(int row, int column) {
@@ -123,13 +153,12 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 clearMenuItem.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
-                        int[] rows = collaboratorTable.getSelectedRows();
                         int answer = JOptionPane.showConfirmDialog(null,"This will clear all interactions, are you sure?");
                         TableModel model = (DefaultTableModel) collaboratorTable.getModel();
                         if(answer == 0) {
                             interactionHistory = new HashMap<>();
                             originalRequests = new LimitedHashMap<>(10000);
-                            readRows = new ArrayList<Integer>();
+                            readRows = new ArrayList<Long>();
                             unread = 0;
                             ((DefaultTableModel) model).setRowCount(0);
                             interactionsTab.removeAll();
@@ -153,17 +182,17 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     @Override
                     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
                     {
-                        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                        final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, table.convertRowIndexToView(row), column);
+                        long id = (long) table.getModel().getValueAt(table.convertRowIndexToView(row), 0);
                         if(isSelected) {
-                            if(!readRows.contains(row)) {
+                            if(!readRows.contains(id)) {
                                 c.setFont(c.getFont().deriveFont(Font.PLAIN));
-                                readRows.add(row);
+                                readRows.add(id);
                                 unread--;
                             }
                             if(selectedRow != row) {
                                 JPanel descriptionPanel = new JPanel(new BorderLayout());
-                                int collaboratorID = (int) collaboratorTable.getModel().getValueAt(row, 0);
-                                IBurpCollaboratorInteraction interaction = interactionHistory.get(collaboratorID);
+                                IBurpCollaboratorInteraction interaction = interactionHistory.get(id);
                                 JTextArea description = new JTextArea();
                                 description.setEditable(false);
                                 description.setBorder(null);
@@ -260,24 +289,24 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 updateTab(false);
                             }
                         } else {
-                            if(!readRows.contains(row)) {
+                            if(!readRows.contains(id)) {
                                 c.setFont(c.getFont().deriveFont(Font.BOLD));
                             }
                         }
 
-                        if(colours.containsKey(row) && isSelected) {
-                            if(colours.get(row) == null) {
-                                setBackground(colours.get(row));
-                                colours.remove(row);
-                                textColours.remove(row);
+                        if(colours.containsKey(id) && isSelected) {
+                            if(colours.get(id) == null) {
+                                setBackground(colours.get(id));
+                                colours.remove(id);
+                                textColours.remove(id);
                             } else {
-                                setBackground(colours.get(row).darker());
+                                setBackground(colours.get(id).darker());
                             }
-                            setForeground(textColours.get(row));
+                            setForeground(textColours.get(id));
                             collaboratorTable.repaint();
-                        } else if(colours.containsKey(row)) {
-                            setBackground(colours.get(row));
-                            setForeground(textColours.get(row));
+                        } else if(colours.containsKey(id)) {
+                            setBackground(colours.get(id));
+                            setForeground(textColours.get(id));
                         } else if(isSelected) {
                             if(UIManager.getLookAndFeel().getID().equals("Darcula")) {
                                 setBackground(Color.decode("0x0d293e"));
@@ -297,13 +326,15 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 Runnable collaboratorRunnable = new Runnable() {
                     public void run() {
                         stdout.println("Taborator running...");
+                        long rowNumber = 0;
                         while(running){
                             if(pollNow) {
                                 List<IBurpCollaboratorInteraction> interactions = collaborator.fetchAllCollaboratorInteractions();
                                 boolean hasInteractions = false;
                                 for(int i=0;i<interactions.size();i++) {
                                     IBurpCollaboratorInteraction interaction =  interactions.get(i);
-                                    int rowID = model.getRowCount()+1;
+                                    rowNumber++;
+                                    long rowID = rowNumber;
                                     model.addRow(new Object[]{rowID,interaction.getProperty("time_stamp"), interaction.getProperty("type"), interaction.getProperty("client_ip"), interaction.getProperty("interaction_id"), ""});
                                     unread++;
                                     interactionHistory.put(rowID, interaction);
@@ -313,7 +344,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 pollNow = false;
                             }
                             try {
-                                Thread.sleep(POLL_EVERY_MS);
+                                isSleeping = true;
+                                pollThread.sleep(POLL_EVERY_MS);
+                                isSleeping = false;
                                 pollCounter++;
                                 if(pollCounter > 5) {
                                     if(createdCollaboratorPayload) {
@@ -322,8 +355,13 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     pollCounter = 0;
                                 }
                             } catch (InterruptedException e) {
-                                stdout.println("Taborator shutdown.");
-                                return;
+                                if(shutdown) {
+                                    stdout.println("Taborator shutdown.");
+                                    return;
+                                } else {
+                                    continue;
+                                }
+
                             }
                         }
                         stdout.println("Taborator shutdown.");
@@ -382,10 +420,10 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         item.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                int rowNum = collaboratorTable.getSelectedRow();
-                if(rowNum > -1) {
-                    colours.put(rowNum, colour);
-                    textColours.put(rowNum, textColour);
+                long id = (long) collaboratorTable.getModel().getValueAt(collaboratorTable.getSelectedRow(), 0);;
+                if(id > -1) {
+                    colours.put(id, colour);
+                    textColours.put(id, textColour);
                 }
             }
         });
@@ -416,7 +454,18 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             }
         }
     }
-
+    private GridBagConstraints createConstraints(int x, int y, int gridWidth, int fill) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.fill = fill;
+        c.weightx = 0;
+        c.weighty = 0;
+        c.gridx = x;
+        c.gridy = y;
+        c.ipadx = 0;
+        c.ipady = 0;
+        c.gridwidth = gridWidth;
+        return c;
+    }
     public byte[] fixContentLength(byte[] request) {
         IRequestInfo analyzedRequest = helpers.analyzeRequest(request);
         if (countMatches(request, helpers.stringToBytes("Content-Length: ")) > 0) {
@@ -546,6 +595,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
 
     @Override
     public void extensionUnloaded() {
+        shutdown = true;
         stdout.println(extensionName + " unloaded");
         running = false;
         pollThread.interrupt();
