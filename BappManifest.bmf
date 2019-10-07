@@ -2,8 +2,8 @@ Uuid: c9c37e424a744aa08866652f63ee9e0f
 ExtensionType: 1
 Name: Taborator
 RepoName: taborator
-ScreenVersion: 1.1
-SerialVersion: 1
+ScreenVersion: 1.2
+SerialVersion: 2
 MinPlatformVersion: 0
 ProOnly: True
 Author: Gareth Heyes, PortSwigger web security
