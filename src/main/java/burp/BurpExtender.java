@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.2";
+    private String extensionVersion = "1.3";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -70,6 +70,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 createCollaboratorPayload.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
+                        createdCollaboratorPayload = true;
                         String payload = collaborator.generatePayload(true);
                         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
                     }
