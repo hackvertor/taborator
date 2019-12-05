@@ -133,7 +133,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 interactionsTab = new JTabbedPane();
                 JSplitPane collaboratorClientSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
                 collaboratorClientSplit.setResizeWeight(.5d);
-                final Class[] classes = new Class[]{Integer.class, Long.class, String.class, String.class, String.class, String.class};
+                final Class[] classes = new Class[]{Long.class, Long.class, String.class, String.class, String.class, String.class};
                 model = new DefaultTableModel() {
                     @Override
                     public boolean isCellEditable(int row, int column) {
