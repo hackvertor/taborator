@@ -20,6 +20,7 @@ repositories {
 dependencies {
     compile fileTree(dir: 'lib', include: '*.jar')
     compileOnly 'net.portswigger.burp.extender:burp-extender-api:1.7.22'
+    compile 'com.google.code.gson:gson:2.8.5'
 }
 
 jar {
