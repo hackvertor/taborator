@@ -1,5 +1,10 @@
 package burp;
 
+import com.coreyd97.BurpExtenderUtilities.DefaultGsonProvider;
+import com.coreyd97.BurpExtenderUtilities.ILogProvider;
+import com.coreyd97.BurpExtenderUtilities.Preferences;
+import com.google.gson.reflect.TypeToken;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -22,18 +27,18 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.3";
+    private String extensionVersion = "1.4";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
     private PrintWriter stdout;
     private JPanel panel;
     private volatile boolean running;
-    private long unread = 0;
-    private ArrayList<Long> readRows = new ArrayList<Long>();
+    private long unread = 0L;
+    private ArrayList<Long> readRows = new ArrayList<>();
     private IBurpCollaboratorClientContext collaborator = null;
-    private HashMap<Long, IBurpCollaboratorInteraction> interactionHistory = new HashMap<>();
-    private HashMap<String, IHttpRequestResponse> originalRequests = new LimitedHashMap<>(10000);
+    private HashMap<Long, HashMap<String, String>> interactionHistory = new HashMap<>();
+    private HashMap<String, HashMap<String,String>> originalRequests = new HashMap<>();
     private JTabbedPane interactionsTab;
     private long selectedRow = -1;
     private HashMap<Long, Color> colours = new HashMap<>();
@@ -46,6 +51,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private int pollCounter = 0;
     private boolean shutdown = false;
     private boolean isSleeping = false;
+    private Preferences prefs;
+    private long rowNumber = 0L;
+    private DefaultTableModel model;
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         shutdown = false;
         isSleeping = false;
@@ -57,11 +65,36 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         stderr = new PrintWriter(callbacks.getStderr(), true);
         stdout = new PrintWriter(callbacks.getStdout(), true);
         callbacks.setExtensionName(extensionName);
+        DefaultGsonProvider gsonProvider = new DefaultGsonProvider();
+
+        prefs = new Preferences("Taborator", gsonProvider, new ILogProvider() {
+            @Override
+            public void logOutput(String message) {
+                //System.out.println("Output:"+message);
+            }
+
+            @Override
+            public void logError(String errorMessage) {
+                System.err.println("Error Output:"+errorMessage);
+            }
+        }, callbacks);
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 stdout.println(extensionName + " " + extensionVersion);
                 stdout.println("To use Taborator right click in the repeater request tab and select \"Taborator->Insert Collaborator payload\". Use \"Taborator->Insert Collaborator placeholder\" to insert a placeholder that will be replaced by a Collaborator payload in every request. The Taborator placeholder also works in other Burp tools. You can also use the buttons in the Taborator tab to create a payload and poll now.");
                 running = true;
+                try {
+                    prefs.registerSetting("config", new TypeToken<HashMap<String, Long>>() {
+                    }.getType(),new HashMap<>(),Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("readRows", new TypeToken<ArrayList<Long>>() {
+                    }.getType(), new ArrayList<Long>(), Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("interactionHistory", new TypeToken<HashMap<Long, HashMap<String, String>>>() {
+                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("originalRequests", new TypeToken<HashMap<String, HashMap<String, String>>>() {
+                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                } catch(Throwable e) {
+                    System.err.println("Error registering settings:"+e);
+                }
                 panel = new JPanel(new BorderLayout());
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
@@ -100,8 +133,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 interactionsTab = new JTabbedPane();
                 JSplitPane collaboratorClientSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
                 collaboratorClientSplit.setResizeWeight(.5d);
-                final Class[] classes = new Class[]{Long.class, Long.class, String.class, String.class, String.class, String.class};
-                DefaultTableModel model = new DefaultTableModel() {
+                final Class[] classes = new Class[]{Integer.class, Long.class, String.class, String.class, String.class, String.class};
+                model = new DefaultTableModel() {
                     @Override
                     public boolean isCellEditable(int row, int column) {
                         return false;
@@ -158,9 +191,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         TableModel model = (DefaultTableModel) collaboratorTable.getModel();
                         if(answer == 0) {
                             interactionHistory = new HashMap<>();
-                            originalRequests = new LimitedHashMap<>(10000);
-                            readRows = new ArrayList<Long>();
-                            unread = 0;
+                            originalRequests = new HashMap<>();
+                            readRows = new ArrayList<>();
+                            unread = 0L;
                             ((DefaultTableModel) model).setRowCount(0);
                             interactionsTab.removeAll();
                             updateTab(false);
@@ -193,29 +226,29 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                             }
                             if(selectedRow != row) {
                                 JPanel descriptionPanel = new JPanel(new BorderLayout());
-                                IBurpCollaboratorInteraction interaction = interactionHistory.get(id);
+                                HashMap<String, String> interaction = interactionHistory.get(id);
                                 JTextArea description = new JTextArea();
                                 description.setEditable(false);
                                 description.setBorder(null);
                                 interactionsTab.removeAll();
                                 interactionsTab.addTab("Description", descriptionPanel);
-                                if(interaction.getProperty("type").equals("DNS")) {
+                                if(interaction.get("type").equals("DNS")) {
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
-                                    description.setText("The Collaborator server received a DNS lookup of type " + interaction.getProperty("query_type") + " for the domain name " + interaction.getProperty("interaction_id") + "." + collaborator.getCollaboratorServerLocation() + ".\n\n" +
-                                            "The lookup was received from IP address " + interaction.getProperty("client_ip") + " at " + interaction.getProperty("time_stamp"));
+                                    description.setText("The Collaborator server received a DNS lookup of type " + interaction.get("query_type") + " for the domain name " + interaction.get("interaction_id") + "." + collaborator.getCollaboratorServerLocation() + ".\n\n" +
+                                            "The lookup was received from IP address " + interaction.get("client_ip") + " at " + interaction.get("time_stamp"));
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
-                                    messageEditor.setMessage(helpers.base64Decode(interaction.getProperty("raw_query")), false);
-                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id"))) {
-                                        IHttpRequestResponse messageInfo = originalRequests.get(interaction.getProperty("interaction_id"));
-                                        IHttpService httpService = messageInfo.getHttpService();
+                                    messageEditor.setMessage(helpers.base64Decode(interaction.get("raw_query")), false);
+                                    if(originalRequests.containsKey(interaction.get("interaction_id"))) {
+                                        HashMap<String,String> requestInfo = originalRequests.get(interaction.get("interaction_id"));
+                                        IHttpService httpService = helpers.buildHttpService(requestInfo.get("host"),Integer.decode(requestInfo.get("port")),requestInfo.get("protocol"));
                                         taboratorMessageEditorController.setHttpService(httpService);
                                         IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
-                                        requestMessageEditor.setMessage(messageInfo.getRequest(), true);
+                                        requestMessageEditor.setMessage(helpers.stringToBytes(requestInfo.get("request")), true);
                                         interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
                                     }
                                     interactionsTab.addTab("DNS query", messageEditor.getComponent());
-                                } else if(interaction.getProperty("type").equals("SMTP")) {
-                                    byte[] conversation = helpers.base64Decode(interaction.getProperty("conversation"));
+                                } else if(interaction.get("type").equals("SMTP")) {
+                                    byte[] conversation = helpers.base64Decode(interaction.get("conversation"));
                                     String conversationString = helpers.bytesToString(conversation);
                                     String to = "";
                                     String from = "";
@@ -234,7 +267,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     }
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
                                     description.setText(
-                                            "The Collaborator server received a SMTP connection from IP address " + interaction.getProperty("client_ip") + " at " + interaction.getProperty("time_stamp") + ".\n\n" +
+                                            "The Collaborator server received a SMTP connection from IP address " + interaction.get("client_ip") + " at " + interaction.get("time_stamp") + ".\n\n" +
                                             "The email details were:\n\n" +
                                             "From: " + from + "\n\n" +
                                             "To: " + to + "\n\n" +
@@ -242,38 +275,39 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     );
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     messageEditor.setMessage(conversation, false);
-                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id"))) {
-                                        IHttpRequestResponse messageInfo = originalRequests.get(interaction.getProperty("interaction_id"));
-                                        IHttpService httpService = messageInfo.getHttpService();
+                                    if(originalRequests.containsKey(interaction.get("interaction_id"))) {
+                                        HashMap<String,String> requestInfo = originalRequests.get(interaction.get("interaction_id"));
+                                        IHttpService httpService = helpers.buildHttpService(requestInfo.get("host"),Integer.decode(requestInfo.get("port")),requestInfo.get("protocol"));
                                         taboratorMessageEditorController.setHttpService(httpService);
                                         IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
-                                        requestMessageEditor.setMessage(messageInfo.getRequest(), true);
+                                        requestMessageEditor.setMessage(helpers.stringToBytes(requestInfo.get("request")), true);
                                         interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
                                     }
                                     interactionsTab.addTab("SMTP Conversation", messageEditor.getComponent());
-                                } else if(interaction.getProperty("type").equals("HTTP")) {
+                                    interactionsTab.setSelectedIndex(1);
+                                } else if(interaction.get("type").equals("HTTP")) {
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
                                     URL collaboratorURL = null;
                                     try {
-                                        collaboratorURL = new URL(interaction.getProperty("protocol").toLowerCase()+"://"+collaborator.getCollaboratorServerLocation());
+                                        collaboratorURL = new URL(interaction.get("protocol").toLowerCase()+"://"+collaborator.getCollaboratorServerLocation());
                                     } catch (MalformedURLException e) {
                                         stderr.println("Failed parsing Collaborator URL:"+e.toString());
                                     }
                                     if(collaboratorURL != null) {
-                                        IHttpService httpService = helpers.buildHttpService(collaboratorURL.getHost(), collaboratorURL.getPort() == -1 ? collaboratorURL.getDefaultPort() : collaboratorURL.getPort(), interaction.getProperty("protocol").equals("HTTPS"));
+                                        IHttpService httpService = helpers.buildHttpService(collaboratorURL.getHost(), collaboratorURL.getPort() == -1 ? collaboratorURL.getDefaultPort() : collaboratorURL.getPort(), interaction.get("protocol").equals("HTTPS"));
                                         taboratorMessageEditorController.setHttpService(httpService);
                                     }
-                                    byte[] collaboratorResponse = helpers.base64Decode(interaction.getProperty("response"));
-                                    byte[] collaboratorRequest = helpers.base64Decode(interaction.getProperty("request"));
+                                    byte[] collaboratorResponse = helpers.base64Decode(interaction.get("response"));
+                                    byte[] collaboratorRequest = helpers.base64Decode(interaction.get("request"));
                                     taboratorMessageEditorController.setRequest(collaboratorRequest);
                                     taboratorMessageEditorController.setResponse(collaboratorResponse);
-                                    description.setText("The Collaborator server received an "+interaction.getProperty("protocol")+" request.\n\nThe request was received from IP address "+interaction.getProperty("client_ip")+" at "+interaction.getProperty("time_stamp"));
-                                    if(originalRequests.containsKey(interaction.getProperty("interaction_id"))) {
-                                        IHttpRequestResponse messageInfo = originalRequests.get(interaction.getProperty("interaction_id"));
-                                        IHttpService httpService = messageInfo.getHttpService();
+                                    description.setText("The Collaborator server received an "+interaction.get("protocol")+" request.\n\nThe request was received from IP address "+interaction.get("client_ip")+" at "+interaction.get("time_stamp"));
+                                    if(originalRequests.containsKey(interaction.get("interaction_id"))) {
+                                        HashMap<String,String> requestInfo = originalRequests.get(interaction.get("interaction_id"));
+                                        IHttpService httpService = helpers.buildHttpService(requestInfo.get("host"),Integer.decode(requestInfo.get("port")),requestInfo.get("protocol"));
                                         taboratorMessageEditorController.setHttpService(httpService);
                                         IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
-                                        requestMessageEditor.setMessage(messageInfo.getRequest(), true);
+                                        requestMessageEditor.setMessage(helpers.stringToBytes(requestInfo.get("request")), true);
                                         interactionsTab.addTab("Original request", requestMessageEditor.getComponent());
                                     }
                                     IMessageEditor requestMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
@@ -282,6 +316,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     IMessageEditor responseMessageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     responseMessageEditor.setMessage(collaboratorResponse, true);
                                     interactionsTab.addTab("Response from Collaborator", responseMessageEditor.getComponent());
+                                    interactionsTab.setSelectedIndex(1);
                                 }
                                 description.setBorder(BorderFactory.createCompoundBorder(description.getBorder(), BorderFactory.createEmptyBorder(10, 10, 10, 10)));
                                 descriptionPanel.add(description);
@@ -327,21 +362,22 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 Runnable collaboratorRunnable = new Runnable() {
                     public void run() {
                         stdout.println("Taborator running...");
-                        long rowNumber = 0;
+                        loadSettings();
+                        for (Map.Entry<Long, HashMap<String, String>> data : interactionHistory.entrySet()) {
+                            long id = data.getKey();
+                            HashMap<String, String> interaction = data.getValue();
+                            insertInteraction(interaction, id);
+                        }
+                        if(unread > 0) {
+                            updateTab(true);
+                        }
+
                         while(running){
                             if(pollNow) {
                                 List<IBurpCollaboratorInteraction> interactions = collaborator.fetchAllCollaboratorInteractions();
-                                boolean hasInteractions = false;
-                                for(int i=0;i<interactions.size();i++) {
-                                    IBurpCollaboratorInteraction interaction =  interactions.get(i);
-                                    rowNumber++;
-                                    long rowID = rowNumber;
-                                    model.addRow(new Object[]{rowID,interaction.getProperty("time_stamp"), interaction.getProperty("type"), interaction.getProperty("client_ip"), interaction.getProperty("interaction_id"), ""});
-                                    unread++;
-                                    interactionHistory.put(rowID, interaction);
-                                    hasInteractions = true;
+                                if(interactions.size() > 0) {
+                                    insertInteractions(interactions);
                                 }
-                                updateTab(hasInteractions);
                                 pollNow = false;
                             }
                             try {
@@ -372,6 +408,53 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 pollThread.start();
             }
         });
+    }
+    private void insertInteraction(HashMap<String,String> interaction, long rowID) {
+        model.addRow(new Object[]{rowID,interaction.get("time_stamp"), interaction.get("type"), interaction.get("client_ip"), interaction.get("interaction_id"), ""});
+    }
+    private void loadSettings() {
+        try {
+            HashMap<String,Long> config = prefs.getSetting("config");
+            if(config.size() > 0) {
+                unread = config.get("unread");
+                rowNumber = config.get("rowNumber");
+            }
+            interactionHistory = prefs.getSetting("interactionHistory");
+            originalRequests = prefs.getSetting("originalRequests");
+            readRows = prefs.getSetting("readRows");
+        } catch(Throwable e) {
+            System.err.println("Error reading settings:"+e);
+        }
+    }
+    private void saveSettings() {
+        try {
+            HashMap<String,Long> config = new HashMap<>();
+            config.put("unread", unread);
+            config.put("rowNumber", rowNumber);
+            prefs.setSetting("config", config);
+            prefs.setSetting("interactionHistory", interactionHistory);
+            prefs.setSetting("originalRequests", originalRequests);
+            prefs.setSetting("readRows", readRows);
+        } catch (Throwable e) {
+            System.err.println("Error saving settings:"+e);
+        }
+    }
+    private void insertInteractions(List<IBurpCollaboratorInteraction> interactions) {
+        boolean hasInteractions = false;
+        for(int i=0;i<interactions.size();i++) {
+            IBurpCollaboratorInteraction interaction =  interactions.get(i);
+            HashMap<String, String> interactionHistoryItem = new HashMap<>();
+            rowNumber++;
+            long rowID = rowNumber;
+            for (Map.Entry<String,String> interactionData : interaction.getProperties().entrySet()) {
+                interactionHistoryItem.put(interactionData.getKey(), interactionData.getValue());
+            }
+            insertInteraction(interactionHistoryItem, rowID);
+            unread++;
+            interactionHistory.put(rowID, interactionHistoryItem);
+            hasInteractions = true;
+        }
+        updateTab(hasInteractions);
     }
     @Override
     public Component getUiComponent() {
@@ -450,8 +533,14 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             request = helpers.stringToBytes(requestStr);
             request = fixContentLength(request);
             messageInfo.setRequest(request);
+
             for(int i=0;i<collaboratorPayloads.size();i++) {
-                originalRequests.put(collaboratorPayloads.get(i), messageInfo);
+                HashMap<String,String> originalRequestsInfo = new HashMap<>();
+                originalRequestsInfo.put("request", helpers.bytesToString(request));
+                originalRequestsInfo.put("host", messageInfo.getHttpService().getHost());
+                originalRequestsInfo.put("port", Integer.toString(messageInfo.getHttpService().getPort()));
+                originalRequestsInfo.put("protocol", messageInfo.getHttpService().getProtocol());
+                originalRequests.put(collaboratorPayloads.get(i), originalRequestsInfo);
             }
         }
     }
@@ -597,8 +686,11 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     @Override
     public void extensionUnloaded() {
         shutdown = true;
-        stdout.println(extensionName + " unloaded");
         running = false;
+        stdout.println(extensionName + " unloaded");
         pollThread.interrupt();
+        saveSettings();
     }
+
+
 }
