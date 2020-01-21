@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.5";
+    private String extensionVersion = "1.6";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -164,7 +164,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         int rowNum = collaboratorTable.getSelectedRow();
                         if(rowNum > -1) {
                             String comment = JOptionPane.showInputDialog("Please enter a comment");
-                            collaboratorTable.getModel().setValueAt(comment, rowNum, 5);
+                            collaboratorTable.getModel().setValueAt(comment, collaboratorTable.convertRowIndexToView(rowNum), 5);
                         }
                     }
                 });
@@ -437,7 +437,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 String comment = helpers.urlDecode(command[1]);
                                 int actualID = getRealRowID(rowID);
                                 if(actualID > -1) {
-                                    collaboratorTable.setValueAt(comment, actualID, 5);
+                                    model.setValueAt(comment, actualID, 5);
                                 }
                             }
                         }
@@ -452,7 +452,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         for (int i = 0; i < rowCount; i++) {
             long id = (long) collaboratorTable.getValueAt(i, 0);
             if(rowID == id) {
-                return i;
+                return collaboratorTable.convertRowIndexToView(i);
             }
         }
         return -1;
