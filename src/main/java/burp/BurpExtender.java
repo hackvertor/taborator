@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.6";
+    private String extensionVersion = "1.7";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -215,6 +215,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
                     {
                         final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, table.convertRowIndexToView(row), column);
+                        putClientProperty("html.disable", Boolean.TRUE);
                         long id = (long) table.getModel().getValueAt(table.convertRowIndexToView(row), 0);
                         if(isSelected) {
                             if(!readRows.contains(id)) {
