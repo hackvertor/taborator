@@ -452,8 +452,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         for (int i = 0; i < rowCount; i++) {
             long id = (long) collaboratorTable.getValueAt(i, 0);
             if(rowID == id) {
-                System.out.println("Row:"+i);
-                System.out.println("Converted:"+collaboratorTable.convertRowIndexToView(i));
                 return collaboratorTable.convertRowIndexToView(i);
             }
         }
