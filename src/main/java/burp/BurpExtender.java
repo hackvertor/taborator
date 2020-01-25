@@ -96,6 +96,15 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 panel = new JPanel(new BorderLayout());
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
+                JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Create payload & Taborator commands & copy");
+                createCollaboratorPayloadWithTaboratorCmd.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        createdCollaboratorPayload = true;
+                        String payload = collaborator.generatePayload(true) + "?TaboratorCmd=comment:Test;bgColour:0x000000;textColour:0xffffff";
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
+                    }
+                });
                 JButton pollButton = new JButton("Poll now");
                 JButton createCollaboratorPayload = new JButton("Create payload & copy");
                 createCollaboratorPayload.addActionListener(new ActionListener() {
@@ -117,10 +126,11 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 });
                 pollButton.setPreferredSize(new Dimension(180, 30));
                 pollButton.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(pollButton, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(pollButton, createConstraints(2, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(createCollaboratorPayload, createConstraints(2, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(3, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
