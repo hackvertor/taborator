@@ -96,7 +96,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 panel = new JPanel(new BorderLayout());
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
-                JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Create payload & Taborator commands & copy");
+                JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Taborator commands & copy");
                 createCollaboratorPayloadWithTaboratorCmd.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
