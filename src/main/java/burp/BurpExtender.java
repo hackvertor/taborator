@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.6";
+    private String extensionVersion = "1.7";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -96,6 +96,15 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 panel = new JPanel(new BorderLayout());
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
+                JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Taborator commands & copy");
+                createCollaboratorPayloadWithTaboratorCmd.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        createdCollaboratorPayload = true;
+                        String payload = collaborator.generatePayload(true) + "?TaboratorCmd=comment:Test;bgColour:0x000000;textColour:0xffffff";
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
+                    }
+                });
                 JButton pollButton = new JButton("Poll now");
                 JButton createCollaboratorPayload = new JButton("Create payload & copy");
                 createCollaboratorPayload.addActionListener(new ActionListener() {
@@ -117,10 +126,11 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 });
                 pollButton.setPreferredSize(new Dimension(180, 30));
                 pollButton.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(pollButton, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(pollButton, createConstraints(2, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(createCollaboratorPayload, createConstraints(2, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(3, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
@@ -215,6 +225,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
                     {
                         final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, table.convertRowIndexToView(row), column);
+                        putClientProperty("html.disable", Boolean.TRUE);
                         long id = (long) table.getModel().getValueAt(table.convertRowIndexToView(row), 0);
                         if(isSelected) {
                             if(!readRows.contains(id)) {
