@@ -205,7 +205,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         int rowNum = collaboratorTable.getSelectedRow();
                         if(rowNum > -1) {
                             String comment = JOptionPane.showInputDialog("Please enter a comment");
-                            collaboratorTable.getModel().setValueAt(comment, collaboratorTable.convertRowIndexToView(rowNum), 5);
+                            collaboratorTable.getModel().setValueAt(comment, collaboratorTable.convertRowIndexToModel(rowNum), 5);
                         }
                     }
                 });
@@ -626,7 +626,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         item.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                int realRow = collaboratorTable.convertRowIndexToView(collaboratorTable.getSelectedRow());
+                int realRow = collaboratorTable.convertRowIndexToModel(collaboratorTable.getSelectedRow());
                 if(realRow > -1) {
                     int id = (int) collaboratorTable.getModel().getValueAt(realRow, 0);
                     colours.put(id, colour);
