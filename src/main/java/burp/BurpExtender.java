@@ -626,11 +626,14 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         item.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                int realRow = collaboratorTable.convertRowIndexToModel(collaboratorTable.getSelectedRow());
-                if(realRow > -1) {
-                    int id = (int) collaboratorTable.getModel().getValueAt(realRow, 0);
-                    colours.put(id, colour);
-                    textColours.put(id, textColour);
+                int[] rows = collaboratorTable.getSelectedRows();
+                for(int i=0;i<rows.length;i++) {
+                    int realRow = collaboratorTable.convertRowIndexToModel(rows[i]);
+                    if (realRow > -1) {
+                        int id = (int) collaboratorTable.getModel().getValueAt(realRow, 0);
+                        colours.put(id, colour);
+                        textColours.put(id, textColour);
+                    }
                 }
             }
         });
