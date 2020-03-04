@@ -253,7 +253,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 callbacks.addSuiteTab(BurpExtender.this);
                 collaborator = callbacks.createBurpCollaboratorClientContext();
                 collaboratorTable.putClientProperty("html.disable", Boolean.TRUE);
-                collaboratorTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer()
+                DefaultTableCellRenderer tableCellRender = new DefaultTableCellRenderer()
                 {
                     @Override
                     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
@@ -321,10 +321,10 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
                                     description.setText(
                                             "The Collaborator server received a SMTP connection from IP address " + interaction.get("client_ip") + " at " + interaction.get("time_stamp") + ".\n\n" +
-                                            "The email details were:\n\n" +
-                                            "From: " + from + "\n\n" +
-                                            "To: " + to + "\n\n" +
-                                            "Message: \n" + message
+                                                    "The email details were:\n\n" +
+                                                    "From: " + from + "\n\n" +
+                                                    "To: " + to + "\n\n" +
+                                                    "Message: \n" + message
                                     );
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     messageEditor.setMessage(conversation, false);
@@ -431,7 +431,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         }
                         return c;
                     }
-                });
+                };
+                collaboratorTable.setDefaultRenderer(Object.class, tableCellRender);
+                collaboratorTable.setDefaultRenderer(Number.class, tableCellRender);
                 Runnable collaboratorRunnable = new Runnable() {
                     public void run() {
                         stdout.println("Taborator running...");
