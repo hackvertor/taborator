@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.8";
+    private String extensionVersion = "1.9";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -42,6 +42,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private Integer selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
     private HashMap<Integer, Color> textColours = new HashMap<>();
+    private HashMap<Integer, String> comments = new HashMap<>();
     private static final String COLLABORATOR_PLACEHOLDER = "$collabplz";
     private Thread pollThread;
     private long POLL_EVERY_MS = 10000;
@@ -94,6 +95,12 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     prefs.registerSetting("originalRequests", new TypeToken<HashMap<String, HashMap<String, String>>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("originalResponses", new TypeToken<HashMap<String, String>>() {
+                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("comments", new TypeToken<HashMap<Integer, String>>() {
+                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("colours", new TypeToken<HashMap<Integer, Color>>() {
+                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    prefs.registerSetting("textColours", new TypeToken<HashMap<Integer, Color>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                 } catch(Throwable e) {
                     System.err.println("Error registering settings:"+e);
@@ -204,8 +211,16 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     public void actionPerformed(ActionEvent e) {
                         int rowNum = collaboratorTable.getSelectedRow();
                         if(rowNum > -1) {
+                            int realRowNum = collaboratorTable.convertRowIndexToModel(rowNum);
                             String comment = JOptionPane.showInputDialog("Please enter a comment");
-                            collaboratorTable.getModel().setValueAt(comment, collaboratorTable.convertRowIndexToModel(rowNum), 5);
+                            collaboratorTable.getModel().setValueAt(comment, realRowNum, 5);
+                            if(comment.length() == 0) {
+                                if(comments.containsKey(realRowNum)) {
+                                    comments.remove(realRowNum);
+                                }
+                            } else {
+                                comments.put(realRowNum, comment);
+                            }
                         }
                     }
                 });
@@ -235,6 +250,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                             readRows = new ArrayList<>();
                             unread = 0;
                             rowNumber = 0;
+                            colours = new HashMap<>();
+                            textColours = new HashMap<>();
+                            comments = new HashMap<>();
                             ((DefaultTableModel) model).setRowCount(0);
                             interactionsTab.removeAll();
                             updateTab(false);
@@ -252,7 +270,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 panel.add(collaboratorClientSplit, BorderLayout.CENTER);
                 callbacks.addSuiteTab(BurpExtender.this);
                 collaborator = callbacks.createBurpCollaboratorClientContext();
-                collaboratorTable.putClientProperty("html.disable", Boolean.TRUE);
                 DefaultTableCellRenderer tableCellRender = new DefaultTableCellRenderer()
                 {
                     @Override
@@ -261,6 +278,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         final Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                         int modelRow = table.convertRowIndexToModel(row);
                         int id = (int) table.getModel().getValueAt(modelRow, 0);
+                        putClientProperty("html.disable", Boolean.TRUE);
                         if(isSelected) {
                             if(!readRows.contains(id)) {
                                 c.setFont(c.getFont().deriveFont(Font.PLAIN));
@@ -486,6 +504,13 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     }
     private void insertInteraction(HashMap<String,String> interaction, int rowID) {
         model.addRow(new Object[]{rowID,interaction.get("time_stamp"), interaction.get("type"), interaction.get("client_ip"), interaction.get("interaction_id"), ""});
+        if(comments.size() > 0) {
+            int actualID = getRealRowID(rowID);
+            if(actualID > -1 && comments.containsKey(actualID)) {
+                String comment = comments.get(actualID);
+                model.setValueAt(comment, actualID, 5);
+            }
+        }
         if (interaction.get("type").equals("HTTP")) {
             byte[] collaboratorRequest = helpers.base64Decode(interaction.get("request"));
             if (helpers.indexOf(collaboratorRequest, helpers.stringToBytes("TaboratorCmd="), true, 0, collaboratorRequest.length) > -1) {
@@ -544,6 +569,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             interactionHistory = prefs.getSetting("interactionHistory");
             originalRequests = prefs.getSetting("originalRequests");
             originalResponses = prefs.getSetting("originalResponses");
+            comments = prefs.getSetting("comments");
+            colours = prefs.getSetting("colours");
+            textColours = prefs.getSetting("textColours");
             readRows = prefs.getSetting("readRows");
         } catch(Throwable e) {
             System.err.println("Error reading settings:"+e);
@@ -559,6 +587,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             prefs.setSetting("originalRequests", originalRequests);
             prefs.setSetting("originalResponses", originalResponses);
             prefs.setSetting("readRows", readRows);
+            prefs.setSetting("comments", comments);
+            prefs.setSetting("colours", colours);
+            prefs.setSetting("textColours", textColours);
         } catch (Throwable e) {
             System.err.println("Error saving settings:"+e);
         }
