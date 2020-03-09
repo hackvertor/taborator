@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "1.9";
+    private String extensionVersion = "2.0";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -142,13 +142,28 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     }
                 });
                 JButton pollButton = new JButton("Poll now");
+                JTextField numberOfPayloads = new JTextField("1");
+                numberOfPayloads.setPreferredSize(new Dimension(50, 25));
                 JButton createCollaboratorPayload = new JButton("Create payload & copy");
                 createCollaboratorPayload.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
                         createdCollaboratorPayload = true;
-                        String payload = collaborator.generatePayload(true);
-                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
+                        int amount = 1;
+                        try {
+                            amount = Integer.parseInt(numberOfPayloads.getText());
+                        } catch (NumberFormatException ex) {
+                            amount = 1;
+                        }
+                        String payloads = "";
+                        for(int i=0;i<amount;i++) {
+                            if(amount > 1) {
+                                payloads += collaborator.generatePayload(true) + "\n";
+                            } else {
+                                payloads += collaborator.generatePayload(true);
+                            }
+                        }
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payloads),null);
                     }
                 });
                 pollButton.addActionListener(new ActionListener() {
@@ -167,7 +182,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 topPanel.add(pollButton, createConstraints(3, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(createCollaboratorPayload, createConstraints(4, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(numberOfPayloads, createConstraints(4,2,1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(5, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
