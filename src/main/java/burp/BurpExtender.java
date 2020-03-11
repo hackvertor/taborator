@@ -155,15 +155,13 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         } catch (NumberFormatException ex) {
                             amount = 1;
                         }
-                        String payloads = "";
-                        for(int i=0;i<amount;i++) {
-                            if(amount > 1) {
-                                payloads += collaborator.generatePayload(true) + "\n";
-                            } else {
-                                payloads += collaborator.generatePayload(true);
-                            }
+                        StringBuilder payloads = new StringBuilder();
+                        payloads.append(collaborator.generatePayload(true));
+                        for(int i=1;i<amount;i++) {
+                            payloads.append("\n");
+                            payloads.append(collaborator.generatePayload(true));
                         }
-                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payloads),null);
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payloads.toString()),null);
                     }
                 });
                 pollButton.addActionListener(new ActionListener() {
