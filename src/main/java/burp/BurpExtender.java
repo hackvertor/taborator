@@ -3,6 +3,7 @@ package burp;
 import com.coreyd97.BurpExtenderUtilities.DefaultGsonProvider;
 import com.coreyd97.BurpExtenderUtilities.ILogProvider;
 import com.coreyd97.BurpExtenderUtilities.Preferences;
+import com.coreyd97.BurpExtenderUtilities.ProjectSettingStore;
 import com.google.gson.reflect.TypeToken;
 
 import javax.swing.*;
@@ -13,9 +14,7 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -25,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.0";
+    private String extensionVersion = "2.1";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -108,6 +107,37 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 panel = new JPanel(new BorderLayout());
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
+                JButton exportBtn = new JButton("Export");
+                exportBtn.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        JFrame frame = new JFrame();
+                        JFileChooser fileChooser = new JFileChooser();
+                        fileChooser.setDialogTitle("Please choose where to save interactions");
+                        int userSelection = fileChooser.showSaveDialog(frame);
+                        if (userSelection == JFileChooser.APPROVE_OPTION) {
+                            File fileToSave = fileChooser.getSelectedFile();
+                            String filePath = fileToSave.getAbsolutePath();
+                            ProjectSettingStore projectSettingStore = prefs.getProjectSettingsStore();
+                            saveSettings();
+                            String jsonStr = projectSettingStore.getJSONSettings();
+                            FileWriter file = null;
+                            try {
+                                file = new FileWriter(filePath);
+                                file.write(jsonStr);
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            } finally {
+                                try {
+                                    file.flush();
+                                    file.close();
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                        }
+                    }
+                });
                 JComboBox filter = new JComboBox();
                 filter.addItem("All interactions");
                 filter.addItem("DNS");
@@ -175,13 +205,14 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 });
                 pollButton.setPreferredSize(new Dimension(180, 30));
                 pollButton.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(filter, createConstraints(1, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(2, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(pollButton, createConstraints(3, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(exportBtn, createConstraints(1, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(filter, createConstraints(2, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(3, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(pollButton, createConstraints(4, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(numberOfPayloads, createConstraints(4,2,1, GridBagConstraints.NONE));
-                topPanel.add(createCollaboratorPayload, createConstraints(5, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(numberOfPayloads, createConstraints(5,2,1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(6, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override

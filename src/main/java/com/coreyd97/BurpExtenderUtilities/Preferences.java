@@ -51,6 +51,10 @@ public class Preferences {
         setupProjectSettingsStore();
     }
 
+    public ProjectSettingStore getProjectSettingsStore() {
+        return this.projectSettingsStore;
+    }
+
     private void registerRequiredTypeAdapters(){
         this.gsonProvider.registerTypeAdapter(AtomicInteger.class, new AtomicIntegerTypeAdapter());
         this.gsonProvider.registerTypeAdapter(byte[].class, new ByteArrayToBase64TypeAdapter());

@@ -15,7 +15,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.HashMap;
 
-class ProjectSettingStore implements IHttpRequestResponse {
+public class ProjectSettingStore implements IHttpRequestResponse {
 
     private final Preferences preferenceController;
     private final IBurpExtenderCallbacks callbacks;
@@ -101,6 +101,10 @@ class ProjectSettingStore implements IHttpRequestResponse {
         }
 
         this.serializedValue = json;
+    }
+
+    public String getJSONSettings() {
+        return this.preferenceController.getGsonProvider().getGson().toJson(this.preferences);
     }
 
     public void saveToProject(){
