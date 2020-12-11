@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.1";
+    private String extensionVersion = "2.1.2";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -55,6 +55,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private DefaultTableModel model;
     private JTable collaboratorTable;
     private TableRowSorter<TableModel> sorter = null;
+    private Color defaultTabColour;
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
         shutdown = false;
         isSleeping = false;
@@ -66,6 +67,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         stderr = new PrintWriter(callbacks.getStderr(), true);
         stdout = new PrintWriter(callbacks.getStdout(), true);
         callbacks.setExtensionName(extensionName);
+        defaultTabColour = getDefaultTabColour();
         DefaultGsonProvider gsonProvider = new DefaultGsonProvider();
 
         prefs = new Preferences("Taborator", gsonProvider, new ILogProvider() {
@@ -669,10 +671,20 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         if(hasInteractions) {
             tabbedPane.setBackgroundAt(tabIndex, new Color(0xff6633));
         } else {
-            tabbedPane.setBackgroundAt(tabIndex, new Color(0x000000));
+            tabbedPane.setBackgroundAt(tabIndex, defaultTabColour);
         }
     }
-
+    private Color getDefaultTabColour() {
+        if(running) {
+            JTabbedPane tp = (JTabbedPane) BurpExtender.this.getUiComponent().getParent();
+            int tIndex = getTabIndex(BurpExtender.this);
+            if (tIndex > -1) {
+                return tp.getBackgroundAt(tIndex);
+            }
+            return new Color(0x000000);
+        }
+        return null;
+    }
     private void updateTab(boolean hasInteractions) {
         if(running) {
             JTabbedPane tp = (JTabbedPane) BurpExtender.this.getUiComponent().getParent();
@@ -793,6 +805,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         c.ipadx = 0;
         c.ipady = 0;
         c.gridwidth = gridWidth;
+        c.insets = new Insets(5,5,5,5);
         return c;
     }
     public byte[] fixContentLength(byte[] request) {
