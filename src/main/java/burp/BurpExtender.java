@@ -919,31 +919,41 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         // Read hostname
         try {
             while (true) {
-                int token_len = bb.get();
+                int token_prefix = bb.get();
 
-                if (token_len == 0) {
+                if (token_prefix == 0) {
                     // Reached the end of the hostname
                     break;
                 }
 
-                if (token_len == 0x0c) {
-                    // Magic pointer value. See RFC1035 section 4.1.4
-                    // This isn't a correct implementation. We assume that OFFSET fits into the field's lower byte
-                    // The Burp Collaborator server doesn't seem to support pointers anyway and we don't really
-                    // expect to see pointers in DNS queries (?)
-                    int ptr = bb.get();
-                    if (seenPtrs.contains(ptr)) {
-                        // Loop detected
-                        return fallback;
-                    }
-                    seenPtrs.add(ptr);
-                    bb.position(ptr);
-                } else {
-                    // Grab the token
-                    for (int i = 0; i < token_len; i++) {
+                if ((token_prefix & 0xc0) == 0) {
+                    // It's a length value. Grab the token and follow it up with a dot.
+                    for (int i = 0; i < token_prefix; i++) {
                         hostname.append((char) bb.get());
                     }
                     hostname.append(".");
+                } else {
+                    // It's a special value
+                    if ((token_prefix & 0xc0) != 0xc0) {
+                        // It's an illegal (reserved) value
+                        return fallback;
+                    }
+                    // It's a pointer value. See RFC1035 section 4.1.4
+                    // This isn't necessarily a correct implementation. The Burp Collaborator server doesn't seem to
+                    // support pointers anyway and we don't really expect to see pointers in DNS queries (?)
+
+                    // Rewind pos and get the ptr as a short with the high two bits masked off
+                    bb.position(bb.position() - 1);
+                    int ptr = bb.getShort() & (0xff - 0xc0);
+
+                    // Check for loops
+                    if (seenPtrs.contains(ptr)) {
+                        return fallback;
+                    }
+                    seenPtrs.add(ptr);
+
+                    // Move to where the pointer points
+                    bb.position(ptr);
                 }
             }
         } catch (BufferUnderflowException | IllegalArgumentException e) {
