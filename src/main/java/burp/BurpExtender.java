@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.1.2";
+    private String extensionVersion = "2.1.3";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -173,6 +173,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(payload),null);
                     }
                 });
+                JLabel generateMsg = new JLabel("Number to generate:");
                 JButton pollButton = new JButton("Poll now");
                 JTextField numberOfPayloads = new JTextField("1");
                 numberOfPayloads.setPreferredSize(new Dimension(50, 25));
@@ -211,10 +212,11 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 topPanel.add(filter, createConstraints(2, 2, 1, GridBagConstraints.NONE));
                 topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(3, 2, 1, GridBagConstraints.NONE));
                 topPanel.add(pollButton, createConstraints(4, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(generateMsg, createConstraints(5, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(numberOfPayloads, createConstraints(5,2,1, GridBagConstraints.NONE));
-                topPanel.add(createCollaboratorPayload, createConstraints(6, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(numberOfPayloads, createConstraints(6,2,1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(7, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
