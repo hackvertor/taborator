@@ -3,10 +3,11 @@ ExtensionType: 1
 Name: Taborator
 RepoName: taborator
 ScreenVersion: 2.1.3
-SerialVersion: 12
+SerialVersion: 13
 MinPlatformVersion: 0
 ProOnly: True
 Author: Gareth Heyes, PortSwigger web security
 ShortDescription: Improved Collaborator client in its own tab
 EntryPoint: build/libs/taborator.jar
 BuildCommand: gradle jar
+SupportedProducts: Pro

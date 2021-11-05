@@ -17,6 +17,7 @@ import java.awt.event.*;
 import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.*;
 import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -247,7 +248,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 model.addColumn("Time");
                 model.addColumn("Type");
                 model.addColumn("IP");
-                model.addColumn("Payload");
+                model.addColumn("Hostname");
                 model.addColumn("Comment");
                 collaboratorTable.getColumnModel().getColumn(0).setPreferredWidth(50);
                 collaboratorTable.getColumnModel().getColumn(0).setMaxWidth(50);
@@ -344,7 +345,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                 interactionsTab.addTab("Description", descriptionPanel);
                                 if(interaction.get("type").equals("DNS")) {
                                     TaboratorMessageEditorController taboratorMessageEditorController = new TaboratorMessageEditorController();
-                                    description.setText("The Collaborator server received a DNS lookup of type " + interaction.get("query_type") + " for the domain name " + interaction.get("interaction_id") + "." + collaborator.getCollaboratorServerLocation() + ".\n\n" +
+                                    description.setText("The Collaborator server received a DNS lookup of type " + interaction.get("query_type") + " for the hostname " + interaction.get("hostname") + "\n\n" +
                                             "The lookup was received from IP address " + interaction.get("client_ip") + " at " + interaction.get("time_stamp"));
                                     IMessageEditor messageEditor = callbacks.createMessageEditor(taboratorMessageEditorController, false);
                                     messageEditor.setMessage(helpers.base64Decode(interaction.get("raw_query")), false);
@@ -431,7 +432,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                                     byte[] collaboratorRequest = helpers.base64Decode(interaction.get("request"));
                                     taboratorMessageEditorController.setRequest(collaboratorRequest);
                                     taboratorMessageEditorController.setResponse(collaboratorResponse);
-                                    description.setText("The Collaborator server received an "+interaction.get("protocol")+" request.\n\nThe request was received from IP address "+interaction.get("client_ip")+" at "+interaction.get("time_stamp"));
+                                    description.setText("The Collaborator server received an "+interaction.get("protocol")+" request.\n\nThe request was received from IP address "+interaction.get("client_ip")+" at "+interaction.get("time_stamp") + " for the hostname " + interaction.get("hostname"));
                                     if(originalRequests.containsKey(interaction.get("interaction_id"))) {
                                         HashMap<String, String> requestInfo = originalRequests.get(interaction.get("interaction_id"));
                                         IHttpService httpService = helpers.buildHttpService(requestInfo.get("host"), Integer.decode(requestInfo.get("port")), requestInfo.get("protocol"));
@@ -552,7 +553,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         });
     }
     private void insertInteraction(HashMap<String,String> interaction, int rowID) {
-        model.addRow(new Object[]{rowID,interaction.get("time_stamp"), interaction.get("type"), interaction.get("client_ip"), interaction.get("interaction_id"), ""});
+        model.addRow(new Object[]{rowID,interaction.get("time_stamp"), interaction.get("type"), interaction.get("client_ip"), interaction.get("hostname"), ""});
         if(comments.size() > 0) {
             int actualID = getRealRowID(rowID);
             if(actualID > -1 && comments.containsKey(actualID)) {
@@ -653,6 +654,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
             for (Map.Entry<String,String> interactionData : interaction.getProperties().entrySet()) {
                 interactionHistoryItem.put(interactionData.getKey(), interactionData.getValue());
             }
+            interactionHistoryItem.put("hostname", getHostnameFromInteraction(interactionHistoryItem));
             insertInteraction(interactionHistoryItem, rowID);
             unread++;
             interactionHistory.put(rowID, interactionHistoryItem);
@@ -882,6 +884,122 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
         }
 
         return matches;
+    }
+
+    private String getHostnameFromInteraction(HashMap<String, String> interaction) {
+        String fallback = interaction.get("interaction_id") + "." + collaborator.getCollaboratorServerLocation();
+        switch(interaction.get("type")) {
+            case "DNS":
+                return getHostnameFromDnsRequest(helpers.base64Decode(interaction.get("raw_query")), fallback);
+            case "HTTP":
+                return getHostnameFromHttpRequest(helpers.bytesToString(helpers.base64Decode(interaction.get("request"))), fallback);
+            case "SMTP":
+                return getHostnameFromSmtpConversation(helpers.bytesToString(helpers.base64Decode(interaction.get("conversation"))), fallback);
+            default:
+                return fallback;
+        }
+    }
+
+    private static String getHostnameFromDnsRequest(byte[] rawQuery, String fallback) {
+        StringBuilder hostname = new StringBuilder();
+        HashSet<Integer> seenPtrs = new HashSet<Integer>();
+
+        ByteBuffer bb = ByteBuffer.wrap(rawQuery);
+
+        // Seek to QDCOUNT
+        bb.position(4);
+
+        // If there is a number of questions other than 1 in the query, something has gone wrong
+        short num_questions = bb.getShort();
+        if (num_questions != 1) {
+            return fallback;
+        }
+
+        // Seek to Question section
+        bb.position(12);
+
+        // Read hostname
+        try {
+            while (true) {
+                int token_prefix = bb.get();
+
+                if (token_prefix == 0) {
+                    // Reached the end of the hostname
+                    break;
+                }
+
+                if ((token_prefix & 0xc0) == 0) {
+                    // It's a length value. Grab the token and follow it up with a dot.
+                    for (int i = 0; i < token_prefix; i++) {
+                        hostname.append((char) bb.get());
+                    }
+                    hostname.append(".");
+                } else {
+                    // It's a special value
+                    if ((token_prefix & 0xc0) != 0xc0) {
+                        // It's an illegal (reserved) value
+                        return fallback;
+                    }
+                    // It's a pointer value. See RFC1035 section 4.1.4
+                    // This isn't necessarily a correct implementation. The Burp Collaborator server doesn't seem to
+                    // support pointers anyway and we don't really expect to see pointers in DNS queries (?)
+
+                    // Rewind pos and get the ptr as a short with the high two bits masked off
+                    bb.position(bb.position() - 1);
+                    int ptr = bb.getShort() & (0xff - 0xc0);
+
+                    // Check for loops
+                    if (seenPtrs.contains(ptr)) {
+                        return fallback;
+                    }
+                    seenPtrs.add(ptr);
+
+                    // Move to where the pointer points
+                    bb.position(ptr);
+                }
+            }
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            // OOB error in the ByteBuffer.get() or .position()
+            return fallback;
+        }
+
+        if (hostname.length() == 0) {
+            return hostname.toString();
+        } else {
+            // Remove the trailing "."
+            return hostname.substring(0, hostname.length() - 1);
+        }
+    }
+
+    private static String getHostnameFromHttpRequest(String request, String fallback) {
+        String[] lines = request.split("\r\n");
+        for (String line : lines) {
+            if (line.isEmpty()) {
+                break;
+            } else if (line.toLowerCase(Locale.ROOT).startsWith("host: ")) {
+                return line.split(" ", 2)[1];
+            }
+        }
+        return fallback;
+    }
+
+    private static String getHostnameFromSmtpConversation(String conversation, String fallback) {
+        String[] lines = conversation.split("\r\n");
+        Pattern bracketedAddressPat = Pattern.compile("<(.*)>");
+        for (String line : lines) {
+            if (line.toLowerCase(Locale.ROOT).startsWith("rcpt to:")) {
+                String recipient = line.split(":", 2)[1].trim();
+                Matcher m = bracketedAddressPat.matcher(recipient);
+                if (m.find()) {
+                    // Parsing email addresses is hard but hopefully we've just found a bracketed email address
+                    // e.g. <peter@example.com>
+                    recipient = m.group(1).trim();
+                }
+                int pos = recipient.lastIndexOf("@");
+                return recipient.substring(pos + 1);
+            }
+        }
+        return fallback;
     }
 
     public List<JMenuItem> createMenuItems(IContextMenuInvocation invocation) {
