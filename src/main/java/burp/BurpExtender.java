@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.1.3";
+    private String extensionVersion = "2.1.4";
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -111,6 +111,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 JPanel topPanel = new JPanel();
                 topPanel.setLayout(new GridBagLayout());
                 JButton exportBtn = new JButton("Export");
+                exportBtn.setPreferredSize(new Dimension(80,30));
                 exportBtn.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
@@ -142,7 +143,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     }
                 });
                 JComboBox filter = new JComboBox();
-                filter.addItem("All interactions");
+                filter.setPreferredSize(new Dimension(160, 30));
+                filter.addItem("All types");
                 filter.addItem("DNS");
                 filter.addItem("HTTP");
                 filter.addItem("SMTP");
@@ -166,6 +168,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     }
                 });
                 JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Taborator commands & copy");
+                createCollaboratorPayloadWithTaboratorCmd.setPreferredSize(new Dimension(200, 30));
                 createCollaboratorPayloadWithTaboratorCmd.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
@@ -177,7 +180,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 JLabel generateMsg = new JLabel("Number to generate:");
                 JButton pollButton = new JButton("Poll now");
                 JTextField numberOfPayloads = new JTextField("1");
-                numberOfPayloads.setPreferredSize(new Dimension(50, 25));
+                numberOfPayloads.setPreferredSize(new Dimension(50, 30));
                 JButton createCollaboratorPayload = new JButton("Create payload & copy");
                 createCollaboratorPayload.addActionListener(new ActionListener() {
                     @Override
@@ -207,8 +210,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         }
                     }
                 });
-                pollButton.setPreferredSize(new Dimension(180, 30));
+                pollButton.setPreferredSize(new Dimension(100, 30));
                 pollButton.setMaximumSize(new Dimension(180, 30));
+                exportBtn.setMaximumSize(new Dimension(100, 30));
                 topPanel.add(exportBtn, createConstraints(1, 2, 1, GridBagConstraints.NONE));
                 topPanel.add(filter, createConstraints(2, 2, 1, GridBagConstraints.NONE));
                 topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(3, 2, 1, GridBagConstraints.NONE));
@@ -305,6 +309,7 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                             comments = new HashMap<>();
                             ((DefaultTableModel) model).setRowCount(0);
                             interactionsTab.removeAll();
+                            selectedRow = -1;
                             updateTab(false);
                         }
                         collaboratorTable.clearSelection();
