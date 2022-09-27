@@ -3,7 +3,7 @@ ExtensionType: 1
 Name: Taborator
 RepoName: taborator
 ScreenVersion: 2.1.4
-SerialVersion: 14
+SerialVersion: 15
 MinPlatformVersion: 0
 ProOnly: True
 Author: Gareth Heyes, PortSwigger web security
