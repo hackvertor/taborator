@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.1.4";
+    private String extensionVersion = "2.1.5";
+    private int maxHashMapSize = 10000;
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -36,8 +37,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private ArrayList<Integer> readRows = new ArrayList<>();
     private IBurpCollaboratorClientContext collaborator = null;
     private HashMap<Integer, HashMap<String, String>> interactionHistory = new HashMap<>();
-    private HashMap<String, HashMap<String,String>> originalRequests = new HashMap<>();
-    private HashMap<String, String> originalResponses = new HashMap<>();
+    private HashMap<String, HashMap<String,String>> originalRequests = new LimitedHashMap<>(maxHashMapSize);
+    private HashMap<String, String> originalResponses = new LimitedHashMap<>(maxHashMapSize);
     private JTabbedPane interactionsTab;
     private Integer selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
@@ -95,9 +96,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     prefs.registerSetting("interactionHistory", new TypeToken<HashMap<Integer, HashMap<String, String>>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("originalRequests", new TypeToken<HashMap<String, HashMap<String, String>>>() {
-                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    }.getType(), new LimitedHashMap<>(maxHashMapSize), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("originalResponses", new TypeToken<HashMap<String, String>>() {
-                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    }.getType(), new LimitedHashMap<>(maxHashMapSize), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("comments", new TypeToken<HashMap<Integer, String>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("colours", new TypeToken<HashMap<Integer, Color>>() {
@@ -299,8 +300,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         TableModel model = (DefaultTableModel) collaboratorTable.getModel();
                         if(answer == 0) {
                             interactionHistory = new HashMap<>();
-                            originalRequests = new HashMap<>();
-                            originalResponses = new HashMap<>();
+                            originalRequests = new LimitedHashMap<>(maxHashMapSize);
+                            originalResponses = new LimitedHashMap<>(maxHashMapSize);
                             readRows = new ArrayList<>();
                             unread = 0;
                             rowNumber = 0;
