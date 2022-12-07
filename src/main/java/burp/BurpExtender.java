@@ -7,6 +7,8 @@ import com.coreyd97.BurpExtenderUtilities.ProjectSettingStore;
 import com.google.gson.reflect.TypeToken;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
@@ -25,7 +27,8 @@ import java.util.regex.Pattern;
 
 public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener, IContextMenuFactory, IHttpListener {
     private String extensionName = "Taborator";
-    private String extensionVersion = "2.1.4";
+    private String extensionVersion = "2.1.6";
+    private int maxHashMapSize = 10000;
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private PrintWriter stderr;
@@ -36,8 +39,8 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
     private ArrayList<Integer> readRows = new ArrayList<>();
     private IBurpCollaboratorClientContext collaborator = null;
     private HashMap<Integer, HashMap<String, String>> interactionHistory = new HashMap<>();
-    private HashMap<String, HashMap<String,String>> originalRequests = new HashMap<>();
-    private HashMap<String, String> originalResponses = new HashMap<>();
+    private HashMap<String, HashMap<String,String>> originalRequests = new LimitedHashMap<>(maxHashMapSize);
+    private HashMap<String, String> originalResponses = new LimitedHashMap<>(maxHashMapSize);
     private JTabbedPane interactionsTab;
     private Integer selectedRow = -1;
     private HashMap<Integer, Color> colours = new HashMap<>();
@@ -95,9 +98,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                     prefs.registerSetting("interactionHistory", new TypeToken<HashMap<Integer, HashMap<String, String>>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("originalRequests", new TypeToken<HashMap<String, HashMap<String, String>>>() {
-                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    }.getType(), new LimitedHashMap<>(maxHashMapSize), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("originalResponses", new TypeToken<HashMap<String, String>>() {
-                    }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
+                    }.getType(), new LimitedHashMap<>(maxHashMapSize), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("comments", new TypeToken<HashMap<Integer, String>>() {
                     }.getType(), new HashMap<>(), Preferences.Visibility.PROJECT);
                     prefs.registerSetting("colours", new TypeToken<HashMap<Integer, Color>>() {
@@ -142,29 +145,56 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         }
                     }
                 });
+                JLabel searchText = new JLabel("Search (IP,Host):");
+                JTextField keywordSearch = new JTextField();
+                keywordSearch.setPreferredSize(new Dimension(160, 30));
                 JComboBox filter = new JComboBox();
                 filter.setPreferredSize(new Dimension(160, 30));
-                filter.addItem("All types");
+                filter.addItem("Show all types");
                 filter.addItem("DNS");
                 filter.addItem("HTTP");
                 filter.addItem("SMTP");
+
+                RowFilter rowFilter = new RowFilter<TableModel,Integer>() {
+                    @Override
+                    public boolean include(RowFilter.Entry<? extends TableModel,? extends Integer> row) {
+                        String keyword = keywordSearch.getText();
+                        Boolean hasFilter = filter.getSelectedIndex() > 0;
+                        Boolean hasKeyword = !keyword.equals("");
+                        if(!hasFilter && !hasKeyword) {
+                            return true;
+                        }
+                        if(hasKeyword && hasFilter) {
+                            return (row.getStringValue(3).contains(keyword) || row.getStringValue(4).contains(keyword)) && row.getValue(2).equals(filter.getSelectedItem().toString());
+                        } else if(hasKeyword) {
+                            return row.getStringValue(3).contains(keyword) || row.getStringValue(4).contains(keyword);
+                        } else if(hasFilter) {
+                            return row.getValue(2).equals(filter.getSelectedItem().toString());
+                        } else {
+                            return true;
+                        }
+                    }
+                };
                 filter.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
-                        if(sorter == null) {
-                            return;
-                        }
-                        selectedRow = -1;
-                        if(filter.getSelectedIndex() == 0) {
-                            sorter.setRowFilter(null);
-                        } else {
-                            sorter.setRowFilter(new RowFilter<TableModel,Integer>() {
-                                @Override
-                                public boolean include(RowFilter.Entry<? extends TableModel,? extends Integer> row) {
-                                    return row.getValue(2).equals(filter.getSelectedItem().toString());
-                                }
-                            });
-                        }
+                        sorter.setRowFilter(rowFilter);
+                    }
+                });
+                keywordSearch.getDocument().addDocumentListener(new DocumentListener() {
+                    @Override
+                    public void insertUpdate(DocumentEvent e) {
+                        sorter.setRowFilter(rowFilter);
+                    }
+
+                    @Override
+                    public void removeUpdate(DocumentEvent e) {
+                        sorter.setRowFilter(rowFilter);
+                    }
+
+                    @Override
+                    public void changedUpdate(DocumentEvent e) {
+                        sorter.setRowFilter(rowFilter);
                     }
                 });
                 JButton createCollaboratorPayloadWithTaboratorCmd = new JButton("Taborator commands & copy");
@@ -214,14 +244,16 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 pollButton.setMaximumSize(new Dimension(180, 30));
                 exportBtn.setMaximumSize(new Dimension(100, 30));
                 topPanel.add(exportBtn, createConstraints(1, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(filter, createConstraints(2, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(3, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(pollButton, createConstraints(4, 2, 1, GridBagConstraints.NONE));
-                topPanel.add(generateMsg, createConstraints(5, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(searchText, createConstraints(2, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(keywordSearch, createConstraints(3, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(filter, createConstraints(4, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayloadWithTaboratorCmd, createConstraints(5, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(pollButton, createConstraints(6, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(generateMsg, createConstraints(7, 2, 1, GridBagConstraints.NONE));
                 createCollaboratorPayload.setPreferredSize(new Dimension(180, 30));
                 createCollaboratorPayload.setMaximumSize(new Dimension(180, 30));
-                topPanel.add(numberOfPayloads, createConstraints(6,2,1, GridBagConstraints.NONE));
-                topPanel.add(createCollaboratorPayload, createConstraints(7, 2, 1, GridBagConstraints.NONE));
+                topPanel.add(numberOfPayloads, createConstraints(8,2,1, GridBagConstraints.NONE));
+                topPanel.add(createCollaboratorPayload, createConstraints(9, 2, 1, GridBagConstraints.NONE));
                 panel.add(topPanel, BorderLayout.NORTH);
                 panel.addComponentListener(new ComponentAdapter() {
                     @Override
@@ -291,7 +323,24 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                 highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xfa63fa"), "HTTP", Color.black));
                 highlightMenu.add(generateMenuItem(collaboratorTable, Color.decode("0xb1b1b1"), "HTTP", Color.black));
                 popupMenu.add(highlightMenu);
-                JMenuItem clearMenuItem = new JMenuItem("Clear");
+                JMenuItem markReadMenuItem = new JMenuItem("Mark all as read");
+                markReadMenuItem.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        int answer = JOptionPane.showConfirmDialog(null,"This will mark all interactions as read, are you sure?");
+                        TableModel model = (DefaultTableModel) collaboratorTable.getModel();
+                        if(answer == 0) {
+                            readRows = new ArrayList<>();
+                            for(int i=0;i<model.getRowCount() + 1;i++) {
+                                readRows.add(i);
+                            }
+                            unread = 0;
+                            updateTab(false);
+                            collaboratorTable.repaint();
+                        }
+                    }
+                });
+                JMenuItem clearMenuItem = new JMenuItem("Clear interactions");
                 clearMenuItem.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
@@ -299,8 +348,6 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         TableModel model = (DefaultTableModel) collaboratorTable.getModel();
                         if(answer == 0) {
                             interactionHistory = new HashMap<>();
-                            originalRequests = new HashMap<>();
-                            originalResponses = new HashMap<>();
                             readRows = new ArrayList<>();
                             unread = 0;
                             rowNumber = 0;
@@ -315,7 +362,21 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
                         collaboratorTable.clearSelection();
                     }
                 });
+                JMenuItem clearOriginalReqResItem = new JMenuItem("Clear original requests/responses");
+                clearOriginalReqResItem.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        int answer = JOptionPane.showConfirmDialog(null,"This will remove all req/res history from placeholder usage, are you sure?");
+                        if(answer == 0) {
+                            originalRequests = new LimitedHashMap<>(maxHashMapSize);
+                            originalResponses = new LimitedHashMap<>(maxHashMapSize);
+                        }
+                        collaboratorTable.clearSelection();
+                    }
+                });
+                popupMenu.add(clearOriginalReqResItem);
                 popupMenu.add(clearMenuItem);
+                popupMenu.add(markReadMenuItem);
                 collaboratorTable.setComponentPopupMenu(popupMenu);
 
                 JScrollPane collaboratorScroll = new JScrollPane(collaboratorTable);
